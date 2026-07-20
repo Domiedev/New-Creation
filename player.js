@@ -4,22 +4,24 @@ function drawPlayer() {
     let pcx = player.x + player.width / 2;
     let pcy = player.y + player.height / 2;
 
-    ctx.save();
-    ctx.strokeStyle = player.isEvil ? 'rgba(255, 60, 60, 0.6)' : 'rgba(255, 220, 80, 0.5)';
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.arc(pcx, pcy, PLAYER_SHOOT_RADIUS, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.restore();
-
-    if (nearestEnemyForLaser) {
-        ctx.strokeStyle = 'rgba(255, 50, 50, 0.85)';
-        ctx.lineWidth = 2;
+    if (autoAimEnabled) {
+        ctx.save();
+        ctx.strokeStyle = player.isEvil ? 'rgba(255, 60, 60, 0.6)' : 'rgba(255, 220, 80, 0.5)';
+        ctx.lineWidth = 1.5;
         ctx.beginPath();
-        ctx.moveTo(pcx, pcy);
-        ctx.lineTo(nearestEnemyForLaser.x + nearestEnemyForLaser.width / 2, nearestEnemyForLaser.y + nearestEnemyForLaser.height / 2);
+        ctx.arc(pcx, pcy, PLAYER_SHOOT_RADIUS, 0, Math.PI * 2);
         ctx.stroke();
-        ctx.lineWidth = 1;
+        ctx.restore();
+
+        if (nearestEnemyForLaser) {
+            ctx.strokeStyle = 'rgba(255, 50, 50, 0.85)';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(pcx, pcy);
+            ctx.lineTo(nearestEnemyForLaser.x + nearestEnemyForLaser.width / 2, nearestEnemyForLaser.y + nearestEnemyForLaser.height / 2);
+            ctx.stroke();
+            ctx.lineWidth = 1;
+        }
     }
 
     let sheet = gameImages.angel;
@@ -35,10 +37,10 @@ function drawPlayer() {
 function updatePlayerMovement() {
     let ix = 0;
     let iy = 0;
-    if (keys['ArrowUp']    || keys['w']) iy = -1;
-    if (keys['ArrowDown']  || keys['s']) iy =  1;
-    if (keys['ArrowLeft']  || keys['a']) ix = -1;
-    if (keys['ArrowRight'] || keys['d']) ix =  1;
+    if (keys['w'] || (autoAimEnabled && keys['ArrowUp']))    iy = -1;
+    if (keys['s'] || (autoAimEnabled && keys['ArrowDown']))  iy =  1;
+    if (keys['a'] || (autoAimEnabled && keys['ArrowLeft']))  ix = -1;
+    if (keys['d'] || (autoAimEnabled && keys['ArrowRight'])) ix =  1;
 
     let mx = ix;
     let my = iy;
@@ -94,6 +96,50 @@ function findHighestHealthEnemy() {
     return target;
 }
 
+function rollShotCount() {
+    let extra = Math.floor(player.multishotChance);
+    let remainder = player.multishotChance - extra;
+    if (Math.random() < remainder) extra++;
+    return 1 + extra;
+}
+
+function getDamageMultiplier(x, y) {
+    let stacks = player.items.aoe;
+    if (stacks <= 0 || !player) return 1;
+    let pcx = player.x + player.width / 2;
+    let pcy = player.y + player.height / 2;
+    let radius = PLAYER_SHOOT_RADIUS / 2;
+    if (distanceSq(pcx, pcy, x, y) <= radius * radius) return 1 + stacks;
+    return 1;
+}
+
+function fireProjectiles(baseAngle) {
+    let pcx = player.x + player.width / 2;
+    let pcy = player.y + player.height / 2;
+    let shotCount = rollShotCount();
+    let spread = shotCount > 1 ? Math.PI / 12 : 0;
+    let speed = 400;
+
+    for (let i = 0; i < shotCount; i++) {
+        let angle = baseAngle;
+        if (shotCount > 1) {
+            angle += spread * (i - (shotCount - 1) / 2);
+        }
+        projectiles.push({
+            x: pcx - 2.5, y: pcy - 2.5,
+            width: 5, height: 5,
+            color: 'black',
+            vx: Math.cos(angle) * speed,
+            vy: Math.sin(angle) * speed,
+            damage: player.currentDamage,
+            piercesLeft: player.items.pierce,
+            hitEnemies: []
+        });
+    }
+    shootTimer = player.currentShootInterval;
+    playShootSound();
+}
+
 function shoot() {
     if (gameState != 'playing' || enemies.length == 0 || !player) return;
     let target = findNearestEnemy();
@@ -104,27 +150,18 @@ function shoot() {
     let tx  = target.x + target.width  / 2;
     let ty  = target.y + target.height / 2;
     let baseAngle = Math.atan2(ty - pcy, tx - pcx);
-    let spread = player.projectileCount > 1 ? Math.PI / 12 : 0;
-    let speed = 400;
+    fireProjectiles(baseAngle);
+}
 
-    for (let i = 0; i < player.projectileCount; i++) {
-        let angle = baseAngle;
-        if (player.projectileCount > 1) {
-            angle += spread * (i - (player.projectileCount - 1) / 2);
-        }
-        projectiles.push({
-            x: pcx - 2.5, y: pcy - 2.5,
-            width: 5, height: 5,
-            color: 'black',
-            vx: Math.cos(angle) * speed,
-            vy: Math.sin(angle) * speed,
-            damage: player.currentDamage
-        });
-    }
-    shootTimer = player.currentShootInterval;
+function shootManual() {
+    if (gameState != 'playing' || !player) return;
+    let ix = 0, iy = 0;
+    if (keys['ArrowUp'])    iy = -1;
+    if (keys['ArrowDown'])  iy =  1;
+    if (keys['ArrowLeft'])  ix = -1;
+    if (keys['ArrowRight']) ix =  1;
+    if (ix == 0 && iy == 0) return;
 
-    if (shootSound) {
-        shootSound.currentTime = 0;
-        shootSound.play();
-    }
+    let baseAngle = Math.atan2(iy, ix);
+    fireProjectiles(baseAngle);
 }

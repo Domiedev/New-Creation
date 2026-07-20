@@ -2,11 +2,7 @@ function loadImages() {
     let imageSources = {
         angel: 'angel.png',
         imp:   'Goon1.png',
-        tank:  'tank.png',
-        bg1:   '1.png',
-        bg2:   '2.png',
-        bg3:   '3.png',
-        bg4:   '4.png'
+        tank:  'tank.png'
     };
 
     let totalImages = Object.keys(imageSources).length;
@@ -31,6 +27,23 @@ function loadImages() {
         img.src = imageSources[key];
     }
 
-    shootSound = new Audio('shoot.mp3');
-    shootSound.volume = 0.4;
+    shootSoundPool = [];
+    for (let i = 0; i < SHOOT_SOUND_POOL_SIZE; i++) {
+        let snd = new Audio('shoot.mp3');
+        snd.volume = 0.4;
+        shootSoundPool.push(snd);
+    }
+    shootSoundPoolIndex = 0;
+}
+
+function playShootSound() {
+    let now = performance.now() / 1000;
+    if (now - lastShootSoundTime < SHOOT_SOUND_MIN_GAP) return;
+    lastShootSoundTime = now;
+    if (shootSoundPool.length == 0) return;
+    let snd = shootSoundPool[shootSoundPoolIndex];
+    shootSoundPoolIndex = (shootSoundPoolIndex + 1) % shootSoundPool.length;
+    snd.currentTime = 0;
+    let playResult = snd.play();
+    if (playResult && playResult.catch) playResult.catch(function() {});
 }

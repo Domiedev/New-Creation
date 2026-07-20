@@ -8,24 +8,18 @@ function drawTowers() {
 
         drawRect(w * 0.1, h * 0.7, w * 0.8, h * 0.3, '#555');
 
-        if (tower.type == 'sniper') {
-            drawRect(w * 0.4,  0,       w * 0.2, h * 0.8,  tower.color);
-            drawRect(w * 0.25, h * 0.5, w * 0.5, h * 0.25, '#444');
-            drawRect(w * 0.3,  h * 0.4, w * 0.4, h * 0.1,  '#333');
-            drawText(Math.floor(tower.chargePercent) + '%', w / 2, -10, 'cyan', '12px');
-        } else if (tower.type == 'trap') {
-            if (tower.isActive) {
-                drawRect(w * 0.1, h * 0.7, w * 0.8, h * 0.2, '#888');
-                ctx.fillStyle = '#A9A9A9';
-                ctx.beginPath();
-                ctx.moveTo(w * 0.2, h * 0.8); ctx.lineTo(w * 0.3, h * 0.3); ctx.lineTo(w * 0.4, h * 0.8);
-                ctx.moveTo(w * 0.6, h * 0.8); ctx.lineTo(w * 0.7, h * 0.3); ctx.lineTo(w * 0.8, h * 0.8);
-                ctx.fill();
-            } else {
-                drawRect(w * 0.2, h * 0.8, w * 0.6, h * 0.1, '#666');
-            }
+        if (tower.type == 'trap' && tower.isActive) {
+            ctx.save();
+            ctx.shadowColor = '#FFD700';
+            ctx.shadowBlur = 10;
+            drawIcon(tower.type, w / 2, h * 0.42, w * 0.85);
+            ctx.restore();
         } else {
-            drawRect(0, 0, w, h, tower.color);
+            drawIcon(tower.type, w / 2, h * 0.42, w * 0.75);
+        }
+
+        if (tower.type == 'sniper') {
+            drawText(Math.floor(tower.chargePercent) + '%', w / 2, -10, 'cyan', '12px');
         }
 
         ctx.restore();
@@ -60,6 +54,7 @@ function updateTowers() {
             tower.cooldownTimer = Math.max(0, tower.cooldownTimer - deltaTime);
             if (tower.cooldownTimer <= 0) {
                 if (tower.type == 'trap') updateTrap(tower);
+                else if (tower.type == 'incense') updateIncense(tower);
             }
             if (tower.type == 'trap' && tower.isActive) {
                 tower.activeTimer -= deltaTime;
@@ -104,7 +99,8 @@ function updateTrap(tower) {
         let e = enemies[i];
         if (distanceSq(cx, cy, e.x + e.width / 2, e.y + e.height / 2) < tower.range * tower.range) {
             triggered = true;
-            e.currentHealth -= TOWER_TYPES.trap.damage;
+            let dmg = TOWER_TYPES.trap.damage * getDamageMultiplier(e.x + e.width / 2, e.y + e.height / 2);
+            e.currentHealth -= dmg;
             e.statusEffects.slowed = { duration: TOWER_TYPES.trap.slowDuration, speedMultiplier: TOWER_TYPES.trap.slowFactor };
             if (e.currentHealth <= 0) handleEnemyDefeat(e, i);
         }
@@ -116,24 +112,80 @@ function updateTrap(tower) {
     }
 }
 
-function snapToPath(x, y) {
-    let bestX = x, bestY = y, bestDist = Infinity;
-    for (let i = 0; i < enemyPath.length - 1; i++) {
-        let ax = enemyPath[i].x,   ay = enemyPath[i].y;
-        let bx = enemyPath[i+1].x, by = enemyPath[i+1].y;
-        let dx = bx - ax, dy = by - ay;
-        let lenSq = dx * dx + dy * dy;
-        let t = Math.max(0, Math.min(1, ((x - ax) * dx + (y - ay) * dy) / lenSq));
-        let px = ax + t * dx;
-        let py = ay + t * dy;
-        let dist = Math.sqrt((x - px) * (x - px) + (y - py) * (y - py));
-        if (dist < bestDist) {
-            bestDist = dist;
-            bestX = px;
-            bestY = py;
+function updateIncense(tower) {
+    let cx = tower.x + tower.width  / 2;
+    let cy = tower.y + tower.height / 2;
+    for (let i = 0; i < enemies.length; i++) {
+        let e = enemies[i];
+        if (distanceSq(cx, cy, e.x + e.width / 2, e.y + e.height / 2) < tower.range * tower.range) {
+            e.statusEffects.burning = {
+                duration: TOWER_TYPES.incense.burnDuration,
+                damageInterval: 0.5,
+                damageTimer: 0.5,
+                damageAmount: TOWER_TYPES.incense.burnDamagePerSecond * 0.5
+            };
         }
     }
-    return { x: bestX, y: bestY };
+    tower.cooldownTimer = tower.cooldown;
+}
+
+function getPathSegments() {
+    let path = getCurrentPath();
+    let segs = [];
+    for (let i = 0; i < path.length - 1; i++) segs.push({ a: path[i], b: path[i + 1] });
+    return segs;
+}
+
+function closestPointOnSegment(seg, x, y) {
+    let ax = seg.a.x, ay = seg.a.y, bx = seg.b.x, by = seg.b.y;
+    let dx = bx - ax, dy = by - ay;
+    let lenSq = dx * dx + dy * dy;
+    let t = lenSq > 0 ? Math.max(0, Math.min(1, ((x - ax) * dx + (y - ay) * dy) / lenSq)) : 0;
+    return { x: ax + t * dx, y: ay + t * dy };
+}
+
+function isSegmentHorizontal(seg) {
+    return Math.abs(seg.a.y - seg.b.y) < Math.abs(seg.a.x - seg.b.x);
+}
+
+function findNearestSegmentIndex(x, y) {
+    let segments = getPathSegments();
+    let bestIndex = 0, bestDist = Infinity;
+    for (let i = 0; i < segments.length; i++) {
+        let p = closestPointOnSegment(segments[i], x, y);
+        let d = distanceSq(x, y, p.x, p.y);
+        if (d < bestDist) { bestDist = d; bestIndex = i; }
+    }
+    return bestIndex;
+}
+
+function getSegmentIndexForDirection(dir) {
+    let segments = getPathSegments();
+    let bestIndex = 0;
+    for (let i = 1; i < segments.length; i++) {
+        let seg = segments[i];
+        let best = segments[bestIndex];
+        let midY = (seg.a.y + seg.b.y) / 2, midX = (seg.a.x + seg.b.x) / 2;
+        let bestMidY = (best.a.y + best.b.y) / 2, bestMidX = (best.a.x + best.b.x) / 2;
+        if (dir == 'up'    && midY < bestMidY) bestIndex = i;
+        if (dir == 'down'  && midY > bestMidY) bestIndex = i;
+        if (dir == 'left'  && midX < bestMidX) bestIndex = i;
+        if (dir == 'right' && midX > bestMidX) bestIndex = i;
+    }
+    return bestIndex;
+}
+
+function jumpTrapToDirection(dir) {
+    let segments = getPathSegments();
+    let currentSeg = segments[placingTowerSegmentIndex];
+    let horizontal = isSegmentHorizontal(currentSeg);
+    let isPerpendicular = horizontal ? (dir == 'up' || dir == 'down') : (dir == 'left' || dir == 'right');
+    if (!isPerpendicular) return;
+
+    placingTowerSegmentIndex = getSegmentIndexForDirection(dir);
+    let snapped = closestPointOnSegment(getPathSegments()[placingTowerSegmentIndex], placingTowerX + 15, placingTowerY + 15);
+    placingTowerX = snapped.x - 15;
+    placingTowerY = snapped.y - 15;
 }
 
 function startTowerPlacement(typeKey) {
@@ -142,7 +194,8 @@ function startTowerPlacement(typeKey) {
     placingTowerY = canvas.height / 2 - 15;
 
     if (typeKey == 'trap') {
-        let snapped = snapToPath(placingTowerX + 15, placingTowerY + 15);
+        placingTowerSegmentIndex = findNearestSegmentIndex(placingTowerX + 15, placingTowerY + 15);
+        let snapped = closestPointOnSegment(getPathSegments()[placingTowerSegmentIndex], placingTowerX + 15, placingTowerY + 15);
         placingTowerX = snapped.x - 15;
         placingTowerY = snapped.y - 15;
     }

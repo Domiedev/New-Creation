@@ -15,11 +15,14 @@ const lootboxOkButton  = document.getElementById('lootboxOkButton');
 
 let gameImages = {};
 let imagesLoaded = false;
-let shootSound = null;
+let shootSoundPool = [];
+let shootSoundPoolIndex = 0;
+let lastShootSoundTime = 0;
 
 let placingTowerType = null;
 let placingTowerX = 400;
 let placingTowerY = 300;
+let placingTowerSegmentIndex = 0;
 let pendingTowerPlacement = null;
 
 let gameState;
@@ -40,14 +43,28 @@ let intermissionTimer = 0;
 let enemySpawnTimer = 0;
 let shootTimer = 0;
 let nearestEnemyForLaser = null;
-let enemyToIntroduce = null;
 let availableEnemyTypes = ['goon'];
-let introducedEnemies = {};
 
-let lootboxSpinningTimer = 0;
-let lootboxReel = [];
-let lootboxReelPosition = 0;
-let lootboxSpinSpeed = 1500;
-let lootboxTargetIndex = 0;
-let lootboxFinalItem = null;
+let lootboxFinalIndex = 0;
+let lootboxHighlightIndex = 0;
+let lootboxStepIntervals = [];
+let lootboxStepIndex = 0;
+let lootboxStepTimer = 0;
 let pendingLevelUps = 0;
+
+let autoAimEnabled = true;
+let aimModeMessageTimer = 0;
+
+let difficultyFactor = 1;
+let checkpointOutcomes = [];
+let difficultySampleCounter = 0;
+
+let devilDefeated = false;
+
+let regionSceneCache = {};
+let sparks = [];
+let sparkSpawnTimer = 0;
+
+let devilBoss = null;
+let enemyProjectiles = [];
+let lavaZones = [];

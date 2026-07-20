@@ -44,18 +44,20 @@ function drawEnemy(enemy) {
     ctx.lineWidth = 1;
 }
 
-function spawnEnemy() {
-    let typeKey = getRandomElement(availableEnemyTypes);
+function spawnEnemy(forcedType) {
+    let typeKey = forcedType || getRandomElement(availableEnemyTypes);
     let typeConfig = ENEMY_TYPES[typeKey];
-    let mult = 1 + (currentWave - 1) * 0.15;
-    let hp  = typeConfig.health * mult;
-    let spd = typeConfig.speed * (1 + (currentWave - 1) * 0.05);
-    let xp  = Math.ceil(typeConfig.xp * (1 + (currentWave - 1) * 0.1));
+    let hpMult = 1 + (currentWave - 1) * ENEMY_HP_WAVE_GROWTH;
+    let speedMult = Math.min(ENEMY_SPEED_MULT_CAP, (1 + (currentWave - 1) * ENEMY_SPEED_WAVE_GROWTH) * difficultyFactor);
+    let hp  = typeConfig.health * hpMult * difficultyFactor;
+    let spd = typeConfig.speed * speedMult;
+    let xp  = Math.ceil(typeConfig.xp * (1 + (currentWave - 1) * ENEMY_XP_WAVE_GROWTH) * (1 + (player.level - 1) * ENEMY_XP_LEVEL_GROWTH) * difficultyFactor);
+    let path = getCurrentPath();
 
     enemies.push({
         type: typeKey,
-        x: enemyPath[0].x - typeConfig.width  / 2,
-        y: enemyPath[0].y - typeConfig.height / 2,
+        x: path[0].x - typeConfig.width  / 2,
+        y: path[0].y - typeConfig.height / 2,
         width:  typeConfig.width,
         height: typeConfig.height,
         speed: spd, baseSpeed: spd,
@@ -65,11 +67,32 @@ function spawnEnemy() {
         value: xp,
         animFrame: 0, animTimer: 0,
         moveDir: 'right',
+        reachedCheckpoint: false,
+        checkpointRecorded: false,
         statusEffects: {
             burning: { duration: 0, damageInterval: 0.5, damageTimer: 0, damageAmount: 0 },
             slowed:  { duration: 0, speedMultiplier: 1 }
         }
     });
+}
+
+function recordCheckpointOutcome(success) {
+    checkpointOutcomes.push(success);
+    if (checkpointOutcomes.length > DIFFICULTY_WINDOW) checkpointOutcomes.shift();
+    difficultySampleCounter++;
+
+    if (difficultySampleCounter >= DIFFICULTY_SAMPLE_BATCH && checkpointOutcomes.length > 0) {
+        difficultySampleCounter = 0;
+        let successRate = 0;
+        for (let i = 0; i < checkpointOutcomes.length; i++) {
+            if (checkpointOutcomes[i]) successRate++;
+        }
+        successRate /= checkpointOutcomes.length;
+
+        let targetFactor = DIFFICULTY_MAX - successRate * (DIFFICULTY_MAX - DIFFICULTY_MIN);
+        difficultyFactor += (targetFactor - difficultyFactor) * DIFFICULTY_LERP;
+        difficultyFactor = Math.max(DIFFICULTY_MIN, Math.min(DIFFICULTY_MAX, difficultyFactor));
+    }
 }
 
 function updateEnemyStatusEffects(enemy) {
@@ -79,7 +102,8 @@ function updateEnemyStatusEffects(enemy) {
         burn.duration   -= deltaTime;
         burn.damageTimer -= deltaTime;
         if (burn.damageTimer <= 0) {
-            enemy.currentHealth -= burn.damageAmount;
+            let dmg = burn.damageAmount * getDamageMultiplier(enemy.x + enemy.width / 2, enemy.y + enemy.height / 2);
+            enemy.currentHealth -= dmg;
             burn.damageTimer = burn.damageInterval;
             if (enemy.currentHealth <= 0) died = true;
         }
@@ -102,6 +126,7 @@ function updateEnemyStatusEffects(enemy) {
 
 function moveEnemies() {
     if (gameState != 'playing') return;
+    let path = getCurrentPath();
     for (let i = enemies.length - 1; i >= 0; i--) {
         if (!enemies[i]) continue;
         let enemy = enemies[i];
@@ -114,7 +139,7 @@ function moveEnemies() {
 
         if (!enemies.includes(enemy)) continue;
 
-        let target = enemyPath[enemy.pathIndex];
+        let target = path[enemy.pathIndex];
         let dx = target.x - (enemy.x + enemy.width  / 2);
         let dy = target.y - (enemy.y + enemy.height / 2);
         let dist = Math.sqrt(dx * dx + dy * dy);
@@ -124,7 +149,11 @@ function moveEnemies() {
             enemy.x = target.x - enemy.width  / 2;
             enemy.y = target.y - enemy.height / 2;
             enemy.pathIndex++;
-            if (enemy.pathIndex >= enemyPath.length) {
+            if (!enemy.checkpointRecorded && enemy.pathIndex > CHECKPOINT_PATH_INDEX) {
+                enemy.checkpointRecorded = true;
+                recordCheckpointOutcome(true);
+            }
+            if (enemy.pathIndex >= path.length) {
                 player.health--;
                 enemies.splice(i, 1);
                 if (player.health <= 0) setGameState('gameOver');
@@ -154,6 +183,10 @@ function handleEnemyDefeat(enemy, index) {
         index = enemies.indexOf(enemy);
         if (index == -1) return;
     }
+    if (!enemy.checkpointRecorded) {
+        enemy.checkpointRecorded = true;
+        recordCheckpointOutcome(false);
+    }
     gainXP(enemy.value);
     if (Math.random() < ENEMY_DROP_CHANCE) {
         drops.push({
@@ -164,4 +197,23 @@ function handleEnemyDefeat(enemy, index) {
     }
     if (nearestEnemyForLaser == enemy) nearestEnemyForLaser = null;
     enemies.splice(index, 1);
+
+    if (player && player.items) {
+        if (player.items.lifesteal > 0 && Math.random() < player.items.lifesteal * 0.08) {
+            player.health = Math.min(player.maxHealth, player.health + 1);
+        }
+        if (player.items.chain > 0) {
+            let chainDamage = player.items.chain * 0.3 * player.currentDamage;
+            let deathX = enemy.x + enemy.width / 2;
+            let deathY = enemy.y + enemy.height / 2;
+            for (let i = enemies.length - 1; i >= 0; i--) {
+                let other = enemies[i];
+                if (!other) continue;
+                if (distanceSq(deathX, deathY, other.x + other.width / 2, other.y + other.height / 2) <= 4900) {
+                    other.currentHealth -= chainDamage;
+                    if (other.currentHealth <= 0) handleEnemyDefeat(other, i);
+                }
+            }
+        }
+    }
 }

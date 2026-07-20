@@ -4,6 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>New Creation: GOTY Edition</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -13,10 +16,10 @@
         <button id="playButton">Play</button>
         <button id="retryButton">Retry</button>
         <div id="perkSelection">
-            <h3>Level Up! Choose a Perk:</h3>
-            <button class="perkButton" data-perk="speed">Shoot Speed x 1.2</button>
-            <button class="perkButton" data-perk="damage">Damage x 1.25</button>
-            <button class="perkButton" data-perk="shotgun">Projectiles +1)</button>
+            <h3>Stufenaufstieg! Wähle einen Segen:</h3>
+            <button class="perkButton" data-perk="speed">Eifer x 1.2</button>
+            <button class="perkButton" data-perk="damage">Zorn x 1.25</button>
+            <button class="perkButton" data-perk="shotgun">Segen +10%</button>
         </div>
     </div>
     <div id="infoPopup" class="popup">
@@ -25,13 +28,14 @@
     </div>
     <div id="lootboxPopup" class="popup">
         <p id="lootboxText">Lootbox Text...</p>
-        <button id="lootboxOpenButton">Open!</button>
+        <button id="lootboxOpenButton">Öffnen!</button>
         <button id="lootboxOkButton" style="display: none;">OK</button>
     </div>
 
     <script src="constants.js"></script>
     <script src="state.js"></script>
     <script src="utils.js"></script>
+    <script src="icons.js"></script>
     <script src="assets.js"></script>
     <script src="player.js"></script>
     <script src="enemies.js"></script>
@@ -39,6 +43,8 @@
     <script src="towers.js"></script>
     <script src="lootbox.js"></script>
     <script src="ui.js"></script>
+    <script src="sparks.js"></script>
+    <script src="devilboss.js"></script>
     <script src="main.js"></script>
 </body>
 </html>

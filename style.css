@@ -1,11 +1,15 @@
 body {
     display: flex;
     flex-direction: column;
-    align-items: center; 
-    font-family: sans-serif;
+    align-items: center;
+    font-family: 'Cinzel', Georgia, 'Times New Roman', serif;
     background-color: #f0f0f0;
     margin: 0;
     padding-top: 20px;
+}
+
+button {
+    font-family: inherit;
 }
 
 

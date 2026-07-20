@@ -9,7 +9,7 @@ function drawText(text, x, y, color, size, align, baseline) {
     align    = align    || 'center';
     baseline = baseline || 'middle';
     ctx.fillStyle    = color;
-    ctx.font         = size + ' Arial';
+    ctx.font         = size + " 'Cinzel', Georgia, serif";
     ctx.textAlign    = align;
     ctx.textBaseline = baseline;
     ctx.fillText(text, x, y);
